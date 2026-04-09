@@ -1,0 +1,224 @@
+.tabel-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.prijs-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prijs-tabel thead tr {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.prijs-tabel th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+
+.groep-header td {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: rgba(255,255,255,0.02);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.rij td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.rij:last-child td { border-bottom: none; }
+.rij:hover td { background: rgba(255,255,255,0.02); }
+
+.rij-eigen td { background: rgba(124, 106, 247, 0.04); }
+.rij-eigen:hover td { background: rgba(124, 106, 247, 0.08); }
+
+/* Type tags */
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tag-eigen {
+  background: rgba(124, 106, 247, 0.2);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 106, 247, 0.3);
+}
+
+.tag-concurrent {
+  background: rgba(79, 209, 197, 0.1);
+  color: var(--accent2);
+  border: 1px solid rgba(79, 209, 197, 0.2);
+}
+
+/* Product naam */
+.product-link {
+  color: var(--text);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.product-link:hover { color: var(--accent2); }
+
+.link-icon {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.product-link:hover .link-icon { opacity: 1; }
+
+/* Prijs */
+.prijs-waarde {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prijs-waarde.goedkoopst { color: var(--success); }
+
+.goedkoopst-badge {
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  background: rgba(104, 211, 145, 0.15);
+  color: var(--success);
+  border-radius: 4px;
+  border: 1px solid rgba(104, 211, 145, 0.25);
+}
+
+.geen-prijs {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-up {
+  background: rgba(252, 129, 129, 0.12);
+  color: var(--danger);
+  border: 1px solid rgba(252, 129, 129, 0.2);
+}
+
+.badge-down {
+  background: rgba(104, 211, 145, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(104, 211, 145, 0.2);
+}
+
+/* Datum */
+.cel-datum { color: var(--muted); font-size: 12px; }
+
+/* Verwijder knop */
+.btn-verwijder {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.rij:hover .btn-verwijder { opacity: 1; }
+
+.btn-verwijder:hover {
+  background: rgba(252, 129, 129, 0.15);
+  color: var(--danger);
+}
+
+.btn-verwijder.confirm {
+  background: rgba(252, 129, 129, 0.2);
+  color: var(--danger);
+  font-size: 10px;
+  width: auto;
+  padding: 0 8px;
+  opacity: 1;
+}
+
+/* Samenvatting */
+.samenvatting {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.samenvatting-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.samenvatting-card.duurder {
+  background: rgba(252, 129, 129, 0.08);
+  border: 1px solid rgba(252, 129, 129, 0.15);
+}
+
+.samenvatting-card.goedkoper {
+  background: rgba(104, 211, 145, 0.08);
+  border: 1px solid rgba(104, 211, 145, 0.15);
+}
+
+.samenvatting-label { color: var(--muted); }
+
+.samenvatting-waarde {
+  font-family: var(--mono);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.duurder .samenvatting-waarde { color: var(--danger); }
+.goedkoper .samenvatting-waarde { color: var(--success); }
