@@ -1,10 +1,10 @@
 """
-Scraper module - Playwright met stealth technieken
-Haalt prijs + verzendkosten op van elke webshop URL
+Scraper module - Playwright met cart/checkout flow voor verzendkosten
 """
 
 import re
 import json
+import asyncio
 from typing import Optional
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
@@ -18,7 +18,6 @@ window.chrome = { runtime: {} };
 
 
 def parse_prijs(tekst: str) -> Optional[float]:
-    """Zet prijstekst om naar float. Bijv. '€ 1.299,00' → 1299.0"""
     if not tekst:
         return None
     tekst = re.sub(r"[€$£\s\u00a0]", "", tekst.strip())
@@ -34,10 +33,6 @@ def parse_prijs(tekst: str) -> Optional[float]:
 
 
 async def scrape_product(url: str) -> dict:
-    """
-    Scrape één product URL.
-    Geeft dict terug met: naam, prijs, verzendkosten, totaalprijs, fout
-    """
     resultaat = {
         "url": url,
         "naam": None,
@@ -71,10 +66,9 @@ async def scrape_product(url: str) -> dict:
         await page.add_init_script(STEALTH_SCRIPT)
 
         try:
+            print(f"  → Ophalen: {url}")
             resp = await page.goto(url, wait_until="networkidle", timeout=40000)
-            if resp and resp.status == 403:
-                resultaat["fout"] = "403 - Geblokkeerd (Cloudflare)"
-                return resultaat
+
             if resp and resp.status >= 400:
                 resultaat["fout"] = f"HTTP fout {resp.status}"
                 return resultaat
@@ -88,12 +82,12 @@ async def scrape_product(url: str) -> dict:
                     if await el.count() > 0:
                         naam = (await el.text_content() or "").strip()
                         if naam:
-                            resultaat["naam"] = naam
+                            resultaat["naam"] = naam[:100]
                             break
                 except Exception:
                     continue
 
-            # ── Prijs ophalen ─────────────────────────────────────────────
+            # ── Prijs ophalen van productpagina ───────────────────────────
             prijs_selectors = [
                 "[data-price-type='finalPrice'] .price",
                 ".price-box .price",
@@ -121,7 +115,7 @@ async def scrape_product(url: str) -> dict:
                 except Exception:
                     continue
 
-            # Fallback: JSON-LD structured data
+            # Fallback: JSON-LD
             if not resultaat["prijs"]:
                 try:
                     scripts = await page.locator("script[type='application/ld+json']").all()
@@ -143,47 +137,18 @@ async def scrape_product(url: str) -> dict:
                 except Exception:
                     pass
 
-            # ── Verzendkosten ─────────────────────────────────────────────
-            verzend_selectors = [
-                "[class*='shipping']", "[class*='delivery']",
-                "[class*='verzend']", "[class*='levering']",
-                ".shipping-cost", ".delivery-info",
-            ]
-            for sel in verzend_selectors:
-                try:
-                    el = page.locator(sel).first
-                    if await el.count() > 0:
-                        tekst = (await el.text_content() or "").strip()
-                        if tekst and len(tekst) < 100:
-                            resultaat["verzendkosten"] = tekst
-                            break
-                except Exception:
-                    continue
+            print(f"  → Prijs gevonden: {resultaat['prijs']}")
 
-            # Fallback: zoek in paginatekst
-            if not resultaat["verzendkosten"]:
-                try:
-                    body = await page.locator("body").text_content()
-                    for pattern in [
-                        r"(gratis verzend\w*)",
-                        r"(free shipping)",
-                        r"verzend(?:kosten)?[:\s]+([\d€,.\s]+)",
-                        r"levering[:\s]+([\d€,.\s]+)",
-                    ]:
-                        m = re.search(pattern, body or "", re.IGNORECASE)
-                        if m:
-                            resultaat["verzendkosten"] = m.group(1).strip()
-                            break
-                except Exception:
-                    pass
+            # ── Verzendkosten via winkelwagen ─────────────────────────────
+            verzend = await haal_verzendkosten(page, url)
+            resultaat["verzendkosten"] = verzend
+            print(f"  → Verzendkosten: {verzend}")
 
-            # ── Totaalprijs berekenen ─────────────────────────────────────
+            # ── Totaalprijs ───────────────────────────────────────────────
             if resultaat["prijs"]:
-                verzend_val = parse_prijs(resultaat["verzendkosten"] or "")
-                gratis = resultaat["verzendkosten"] and re.search(
-                    r"gratis|free|0[,.]?00", resultaat["verzendkosten"] or "", re.IGNORECASE
-                )
-                if verzend_val:
+                verzend_val = parse_prijs(verzend or "")
+                gratis = verzend and re.search(r"gratis|free|0[,.]?00", verzend, re.IGNORECASE)
+                if verzend_val and verzend_val > 0:
                     resultaat["totaalprijs"] = round(resultaat["prijs"] + verzend_val, 2)
                 elif gratis:
                     resultaat["totaalprijs"] = resultaat["prijs"]
@@ -191,10 +156,103 @@ async def scrape_product(url: str) -> dict:
                     resultaat["totaalprijs"] = resultaat["prijs"]
 
         except PlaywrightTimeout:
-            resultaat["fout"] = "Timeout - pagina te traag"
+            resultaat["fout"] = "Timeout"
         except Exception as e:
             resultaat["fout"] = str(e)[:200]
         finally:
             await browser.close()
 
     return resultaat
+
+
+async def haal_verzendkosten(page, product_url: str) -> Optional[str]:
+    """Voeg product toe aan winkelwagen en lees verzendkosten uit checkout."""
+    try:
+        # Stap 1: Voeg toe aan winkelwagen
+        add_selectors = [
+            "button:has-text('In winkelwagen')",
+            "button:has-text('Toevoegen aan winkelwagen')",
+            "button:has-text('Add to cart')",
+            "button:has-text('Toevoegen')",
+            "[id*='add-to-cart']",
+            "button[class*='add-to-cart']",
+            "button[class*='cart']",
+            ".btn-cart",
+        ]
+
+        toegevoegd = False
+        for sel in add_selectors:
+            try:
+                btn = page.locator(sel).first
+                if await btn.count() > 0 and await btn.is_visible():
+                    await btn.click()
+                    await page.wait_for_timeout(2000)
+                    toegevoegd = True
+                    print(f"  → Toegevoegd aan winkelwagen via: {sel}")
+                    break
+            except Exception:
+                continue
+
+        if not toegevoegd:
+            print("  → Kon niet toevoegen aan winkelwagen")
+            return None
+
+        # Stap 2: Ga naar checkout/winkelwagen pagina
+        basis_url = product_url.split("/p/")[0] if "/p/" in product_url else "/".join(product_url.split("/")[:3])
+
+        checkout_urls = [
+            f"{basis_url}/checkout",
+            f"{basis_url}/winkelwagen",
+            f"{basis_url}/cart",
+            f"{basis_url}/checkout/cart",
+        ]
+
+        for checkout_url in checkout_urls:
+            try:
+                await page.goto(checkout_url, wait_until="networkidle", timeout=20000)
+                await page.wait_for_timeout(2000)
+
+                # Stap 3: Zoek verzendkosten op checkout pagina
+                verzend_selectors = [
+                    "[class*='shipping'] [class*='price']",
+                    "[class*='shipping-cost']",
+                    "[class*='delivery-cost']",
+                    "[class*='verzend'] [class*='prijs']",
+                    "td:has-text('Verzending') + td",
+                    "td:has-text('Shipping') + td",
+                    "td:has-text('Levering') + td",
+                    "[class*='totals'] [class*='shipping']",
+                ]
+
+                for sel in verzend_selectors:
+                    try:
+                        el = page.locator(sel).first
+                        if await el.count() > 0:
+                            tekst = (await el.text_content() or "").strip()
+                            if tekst and len(tekst) < 50:
+                                return tekst
+                    except Exception:
+                        continue
+
+                # Zoek in paginatekst
+                body = await page.locator("body").text_content()
+                patterns = [
+                    r"(gratis verzend\w*)",
+                    r"(free shipping)",
+                    r"verzend(?:kosten)?[:\s]+([\d€,.\s]+)",
+                    r"levering[:\s]+([\d€,.\s]+)",
+                    r"shipping[:\s]+([\d€,.\s]+)",
+                ]
+                for pattern in patterns:
+                    m = re.search(pattern, body or "", re.IGNORECASE)
+                    if m:
+                        return m.group(1).strip() if m.lastindex else m.group(0).strip()
+
+                break
+            except Exception:
+                continue
+
+    except Exception as e:
+        print(f"  → Fout bij verzendkosten: {e}")
+
+    return None
